@@ -1,33 +1,7 @@
---[[
-SOURCE_ https://github.com/mpv-player/mpv/blob/master/player/lua/osc.lua
-COMMIT_ 20211127 448fe02
-SOURCE_ https://github.com/deus0ww/mpv-conf/blob/master/scripts/Thumbnailer_OSC.lua
-COMMIT_ 20211004 b448073
-
-改进版本的OSC，须禁用原始mpv的内置OSC，且不兼容其它OSC类脚本，实现全部功能需搭配额外两个缩略图引擎脚本（Thumbnailer）。
-示例在 input.conf 中写入：
-SHIFT+DEL  script-binding osc_lazy/visibility  # 切换osc_lazy的可见性
---]]
-
-local orig_osc = mp.get_property('osc')
-if orig_osc == 'yes' then
-    local err = "_____\n{\\1c&H0000FF&}注意：\n必须设置 {\\1c&H0000FF&}osc=no\n打开控制台查看更多信息"
-    mp.set_osd_ass(1280, 720, err)
-    mp.set_property('osc', 'no')
-    mp.msg.warn("脚本已自动执行 osc=no 以临时兼容")
-    mp.msg.warn("正确编辑 mpv.conf 重启程序即可")
-    mp.msg.warn("不要在运行中更改参数 --osc 的状态")
-    mp.msg.warn("注意其它osc类脚本亦不应共存")
-end
-
-local ipairs,loadfile,pairs,pcall,tonumber,tostring = ipairs,loadfile,pairs,pcall,tonumber,tostring
-local debug,io,math,os,string,table,utf8 = debug,io,math,os,string,table,utf8
-local min,max,floor,ceil,huge = math.min,math.max,math.floor,math.ceil,math.huge
-local mp      = require 'mp'
 local assdraw = require 'mp.assdraw'
-local msg     = require 'mp.msg'
-local opt     = require 'mp.options'
-local utils   = require 'mp.utils'
+local msg = require 'mp.msg'
+local opt = require 'mp.options'
+local utils = require 'mp.utils'
 
 --
 -- Parameters
@@ -35,520 +9,57 @@ local utils   = require 'mp.utils'
 -- default user option values
 -- do not touch, change them in osc.conf
 local user_opts = {
-    showwindowed = true,                -- show OSC when windowed?
-    showfullscreen = true,              -- show OSC when fullscreen?
-    scalewindowed = 1,                  -- scaling of the controller when windowed
-    scalefullscreen = 1,                -- scaling of the controller when fullscreen
-    scaleforcedwindow = 2,              -- scaling when rendered on a forced window
-    vidscale = true,                    -- scale the controller with the video?
-    valign = 0.8,                       -- vertical alignment, -1 (top) to 1 (bottom)
-    halign = 0,                         -- horizontal alignment, -1 (left) to 1 (right)
-    barmargin = 0,                      -- vertical margin of top/bottombar
-    boxalpha = 80,                      -- alpha of the background box,
-                                        -- 0 (opaque) to 255 (fully transparent)
-    hidetimeout = 500,                  -- duration in ms until the OSC hides if no
-                                        -- mouse movement. enforced non-negative for the
-                                        -- user, but internally negative is "always-on".
-    fadeduration = 200,                 -- duration of fade out in ms, 0 = no fade
-    deadzonesize = 0.5,                 -- size of deadzone
-    minmousemove = 0,                   -- minimum amount of pixels the mouse has to
-                                        -- move between ticks to make the OSC show up
-    iamaprogrammer = false,             -- use native mpv values and disable OSC
-                                        -- internal track list management (and some
-                                        -- functions that depend on it)
-    layout = "bottombar",               -- 原可选为 "bottombar" "topbar" "box" "slimbox" ；在osc_lazy中新增 "bottombox"
-    seekbarstyle = "bar",               -- bar, diamond or knob
-    seekbarhandlesize = 0.6,            -- size ratio of the diamond and knob handle
-    seekrangestyle = "inverted",        -- bar, line, slider, inverted or none
-    seekrangeseparate = true,           -- wether the seekranges overlay on the bar-style seekbar
-    seekrangealpha = 200,               -- transparency of seekranges
-    seekbarkeyframes = true,            -- use keyframes when dragging the seekbar
-    title = "${media-title}",           -- string compatible with property-expansion
-                                        -- to be shown as OSC title
-    tooltipborder = 1,                  -- border of tooltip in bottom/topbar
-    timetotal = true,                   -- display total time instead of remaining time?   -- 原为false
-    timems = false,                     -- display timecodes with milliseconds?
-    visibility = "auto",                -- only used at init to set visibility_mode(...)
-    boxmaxchars = 150,                  -- title crop threshold for box layout             -- 原为80
-    boxvideo = false,                   -- apply osc_param.video_margins to video
-    windowcontrols = "auto",            -- whether to show window controls
+    showwindowed = true,        -- show OSC when windowed?
+    showfullscreen = true,      -- show OSC when fullscreen?
+    idlescreen = true,          -- show mpv logo on idle
+    scalewindowed = 1,          -- scaling of the controller when windowed
+    scalefullscreen = 1,        -- scaling of the controller when fullscreen
+    scaleforcedwindow = 2,      -- scaling when rendered on a forced window
+    vidscale = true,            -- scale the controller with the video?
+    valign = 0.8,               -- vertical alignment, -1 (top) to 1 (bottom)
+    halign = 0,                 -- horizontal alignment, -1 (left) to 1 (right)
+    barmargin = 0,              -- vertical margin of top/bottombar
+    boxalpha = 80,              -- alpha of the background box,
+                                -- 0 (opaque) to 255 (fully transparent)
+    hidetimeout = 500,          -- duration in ms until the OSC hides if no
+                                -- mouse movement. enforced non-negative for the
+                                -- user, but internally negative is "always-on".
+    fadeduration = 200,         -- duration of fade out in ms, 0 = no fade
+    deadzonesize = 0.5,         -- size of deadzone
+    minmousemove = 0,           -- minimum amount of pixels the mouse has to
+                                -- move between ticks to make the OSC show up
+    iamaprogrammer = false,     -- use native mpv values and disable OSC
+                                -- internal track list management (and some
+                                -- functions that depend on it)
+    layout = "bottombar",
+    seekbarstyle = "bar",       -- bar, diamond or knob
+    seekbarhandlesize = 0.6,    -- size ratio of the diamond and knob handle
+    seekrangestyle = "inverted",-- bar, line, slider, inverted or none
+    seekrangeseparate = true,   -- whether the seekranges overlay on the bar-style seekbar
+    seekrangealpha = 200,       -- transparency of seekranges
+    seekbarkeyframes = true,    -- use keyframes when dragging the seekbar
+    title = "${media-title}",   -- string compatible with property-expansion
+                                -- to be shown as OSC title
+    tooltipborder = 1,          -- border of tooltip in bottom/topbar
+    timetotal = false,          -- display total time instead of remaining time?
+    timems = false,             -- display timecodes with milliseconds?
+    tcspace = 100,              -- timecode spacing (compensate font size estimation)
+    visibility = "auto",        -- only used at init to set visibility_mode(...)
+    boxmaxchars = 80,           -- title crop threshold for box layout
+    boxvideo = false,           -- apply osc_param.video_margins to video
+    windowcontrols = "auto",    -- whether to show window controls
     windowcontrols_alignment = "right", -- which side to show window controls on
-    greenandgrumpy = false,             -- disable santa hat
-    livemarkers = true,                 -- update seekbar chapter markers on duration change
-    chapters_osd = true,                -- whether to show chapters OSD on next/prev
-    playlist_osd = true,                -- whether to show playlist OSD on next/prev
-    chapter_fmt = "章节：%s",           -- chapter print format for seekbar-hover. "no" to disable
-
-    -- 以下为osc_lazy的独占选项
-
-    wctitle = "${media-title}",         -- 无边框的上方标题
-    sub_title = " ",                    -- bottombox布局的右侧子标题
-    sub_title2 = "对比[${contrast}]  亮度[${brightness}]  伽马[${gamma}]  饱和[${saturation}]  色相[${hue}]",
-                                        -- bottombox布局的临时右侧子标题
-    font = "sans",                      -- OSC的全局字体显示
-    font_mono = "sans",
-    font_bold = 500,
+    greenandgrumpy = false,     -- disable santa hat
+    livemarkers = true,         -- update seekbar chapter markers on duration change
+    chapters_osd = true,        -- whether to show chapters OSD on next/prev
+    playlist_osd = true,        -- whether to show playlist OSD on next/prev
+    chapter_fmt = "Chapter: %s", -- chapter print format for seekbar-hover. "no" to disable
+    unicodeminus = false,       -- whether to use the Unicode minus sign character
 }
 
 -- read options from config and command-line
-opt.read_options(user_opts, "osc_lazy", function(list) update_options(list) end)
+opt.read_options(user_opts, "osc", function(list) update_options(list) end)
 
-
-
-
-
-
-
-
-------------
--- tn_osc --
-------------
-local message = {
-	osc = {
-		registration  = 'tn_osc_registration',
-		reset         = 'tn_osc_reset',
-		update        = 'tn_osc_update',
-		finish        = 'tn_osc_finish',
-	},
-	debug = 'Thumbnailer-debug',
-
-	queued     = 1,
-	processing = 2,
-	ready      = 3,
-	failed     = 4,
-}
-
-
------------
--- Utils --
------------
-local OS_MAC, OS_WIN, OS_NIX = 'MAC', 'WIN', 'NIX'
-local function get_os()
-	if jit and jit.os then
-		if jit.os == 'Windows' then return OS_WIN
-		elseif jit.os == 'OSX' then return OS_MAC
-		else return OS_NIX end
-	end
-	if (package.config:sub(1,1) ~= '/') then return OS_WIN end
-	local res = mp.command_native({ name = 'subprocess', args = {'uname', '-s'}, playback_only = false, capture_stdout = true, capture_stderr = true, })
-	return (res and res.stdout and res.stdout:lower():find('darwin') ~= nil) and OS_MAC or OS_NIX
-end
-local OPERATING_SYSTEM = get_os()
-
-local function format_json(tab)
-	local json, err = utils.format_json(tab)
-	if err then msg.error('Formatting JSON failed:', err) end
-	if json then return json else return '' end
-end
-
-local function parse_json(json)
-	local tab, err = utils.parse_json(json, true)
-	if err then msg.error('Parsing JSON failed:', err) end
-	if tab then return tab else return {} end
-end
-
-local function join_paths(...)
-	local sep = OPERATING_SYSTEM == OS_WIN and '\\' or '/'
-	local result = ''
-	for _, p in ipairs({...}) do
-		result = (result == '') and p or result .. sep .. p
-	end
-	return result
-end
-
-
---------------------
--- Data Structure --
---------------------
-local tn_state, tn_osc, tn_osc_options, tn_osc_stats
-local tn_thumbnails_indexed, tn_thumbnails_ready
-local tn_gen_time_start, tn_gen_duration
-
-local function reset_all()
-	tn_state              = nil
-	tn_osc = {
-		cursor            = {},
-		position          = {},
-		scale             = {},
-		osc_scale         = {},
-		spacer            = {},
-		osd               = {},
-		background        = {},
-		font_scale        = {},
-		display_progress  = {},
-		progress          = {},
-		mini              = {},
-		thumbnail = {
-			visible       = false,
-			path_last     = nil,
-			x_last        = nil,
-			y_last        = nil,
-		},
-	}
-	tn_osc_options        = nil
-	tn_osc_stats = {
-		queued            = 0,
-		processing        = 0,
-		ready             = 0,
-		failed            = 0,
-		total             = 0,
-		total_expected    = 0,
-		percent           = 0,
-		timer             = 0,
-	}
-	tn_thumbnails_indexed = {}
-	tn_thumbnails_ready   = {}
-	tn_gen_time_start     = nil
-	tn_gen_duration       = nil
-end
-
-------------
--- TN OSC --
-------------
-local osc_reg = {
-	script_name = mp.get_script_name(),
-	osc_opts = {
-		scalewindowed   = user_opts.scalewindowed,
-		scalefullscreen = user_opts.scalefullscreen,
-	},
-}
-mp.command_native({'script-message', message.osc.registration, format_json(osc_reg)})
-
-local tn_palette = {
-	black        = '000000',
-	white        = 'FFFFFF',
-	alpha_opaque = 0,
-	alpha_clear  = 255,
-	alpha_black  = min(255, user_opts.boxalpha),
-	alpha_white  = min(255, user_opts.boxalpha + (255 - user_opts.boxalpha) * 0.8),
-}
-
-local tn_style_format = {
-	background     = '{\\bord0\\1c&H%s&\\1a&H%X&}',
-	subbackground  = '{\\bord0\\1c&H%s&\\1a&H%X&}',
-	spinner        = '{\\bord0\\fs%d\\fscx%f\\fscy%f',
-	spinner2       = '\\1c&%s&\\1a&H%X&\\frz%d}',
-	closest_index  = '{\\1c&H%s&\\1a&H%X&\\3c&H%s&\\3a&H%X&\\xbord%d\\ybord%d}',
-	progress_mini  = '{\\bord0\\1c&%s&\\1a&H%X&\\fs18\\fscx%f\\fscy%f',
-	progress_mini2 = '\\frz%d}',
-	progress_block = '{\\bord0\\1c&H%s&\\1a&H%X&}',
-	progress_text  = '{\\1c&%s&\\3c&H%s&\\1a&H%X&\\3a&H%X&\\blur0.25\\fs18\\fscx%f\\fscy%f\\xbord%f\\ybord%f\\fn' .. user_opts.font_mono .. '}',
-	text_timer     = '%.2ds',
-	text_progress  = '%.3d/%.3d',
-	text_progress2 = '[%d]',
-	text_percent   = '%d%%',
-}
-
-local tn_style = {
-	background     = (tn_style_format.background):format(tn_palette.black, tn_palette.alpha_black),
-	subbackground  = (tn_style_format.subbackground):format(tn_palette.white, tn_palette.alpha_white),
-	spinner        = (tn_style_format.spinner):format(0, 1, 1),
-	closest_index  = (tn_style_format.closest_index):format(tn_palette.white, tn_palette.alpha_black, tn_palette.black, tn_palette.alpha_black, -1, -1),
-	progress_mini  = (tn_style_format.progress_mini):format(tn_palette.white, tn_palette.alpha_opaque, 1, 1),
-	progress_block = (tn_style_format.progress_block):format(tn_palette.white, tn_palette.alpha_white),
-	progress_text  = (tn_style_format.progress_text):format(tn_palette.white, tn_palette.black, tn_palette.alpha_opaque, tn_palette.alpha_black, 1, 1, 2, 2),
-}
-
-local function set_thumbnail_above(offset)
-	local tn_osc = tn_osc
-	tn_osc.background.bottom   = tn_osc.position.y - offset - tn_osc.spacer.bottom
-	tn_osc.background.top      = tn_osc.background.bottom - tn_osc.background.h
-	tn_osc.thumbnail.top       = tn_osc.background.bottom - tn_osc.thumbnail.h
-	tn_osc.progress.top        = tn_osc.background.bottom - tn_osc.background.h
-	tn_osc.progress.mid        = tn_osc.progress.top + tn_osc.progress.h * 0.5
-	tn_osc.background.rotation = -1
-end
-
-local function set_thumbnail_below(offset)
-	local tn_osc = tn_osc
-	tn_osc.background.top      = tn_osc.position.y + offset + tn_osc.spacer.top
-	tn_osc.thumbnail.top       = tn_osc.background.top
-	tn_osc.progress.top        = tn_osc.background.top + tn_osc.thumbnail.h + tn_osc.spacer.y
-	tn_osc.progress.mid        = tn_osc.progress.top + tn_osc.progress.h * 0.5
-	tn_osc.background.rotation = 1
-end
-
-local function set_mini_above() tn_osc.mini.y = (tn_osc.background.top    - 12 * tn_osc.osc_scale.y) end
-local function set_mini_below() tn_osc.mini.y = (tn_osc.background.bottom + 12 * tn_osc.osc_scale.y) end
-
-local set_thumbnail_layout = {
-	topbar    = function()	tn_osc.spacer.top   = 0.25
-							set_thumbnail_below(38.75)
-							set_mini_above() end,
-	bottombar = function()	tn_osc.spacer.bottom = 0.25
-							set_thumbnail_above(38.75)
-							set_mini_below() end,
-	box       = function()	set_thumbnail_above(15)
-							set_mini_above() end,
-	bottombox = function()	set_thumbnail_above(14)      -- 缩略图适配bottombox布局
-							set_mini_above() end,
-	slimbox   = function()	set_thumbnail_above(12)
-							set_mini_above() end,
-}
-
-local function update_tn_osc_params(seek_y)
-	local tn_state, tn_osc_stats, tn_osc, tn_style, tn_style_format = tn_state, tn_osc_stats, tn_osc, tn_style, tn_style_format
-	tn_osc.scale.x, tn_osc.scale.y   = get_virt_scale_factor()
-	tn_osc.osd.w, tn_osc.osd.h       = mp.get_osd_size()
-	tn_osc.cursor.x, tn_osc.cursor.y = get_virt_mouse_pos()
-	tn_osc.position.y                = seek_y
-
-	local osc_changed = false
-	if     tn_osc.scale.x_last ~= tn_osc.scale.x or tn_osc.scale.y_last ~= tn_osc.scale.y
-		or tn_osc.w_last       ~= tn_state.width or tn_osc.h_last       ~= tn_state.height
-		or tn_osc.osd.w_last   ~= tn_osc.osd.w   or tn_osc.osd.h_last   ~= tn_osc.osd.h
-	then
-		tn_osc.scale.x_last, tn_osc.scale.y_last = tn_osc.scale.x, tn_osc.scale.y
-		tn_osc.w_last, tn_osc.h_last             = tn_state.width, tn_state.height
-		tn_osc.osd.w_last, tn_osc.osd.h_last     = tn_osc.osd.w, tn_osc.osd.h
-		osc_changed = true
-	end
-
-	if osc_changed then
-		tn_osc.osc_scale.x, tn_osc.osc_scale.y   = 1, 1
-		tn_osc.spacer.x, tn_osc.spacer.y         = tn_osc_options.spacer, tn_osc_options.spacer
-		tn_osc.font_scale.x, tn_osc.font_scale.y = 100, 100
-		tn_osc.progress.h                        = (16 + tn_osc_options.spacer)
-		if not user_opts.vidscale then
-			tn_osc.osc_scale.x  = tn_osc.scale.x     * tn_osc_options.scale
-			tn_osc.osc_scale.y  = tn_osc.scale.y     * tn_osc_options.scale
-			tn_osc.spacer.x     = tn_osc.osc_scale.x * tn_osc.spacer.x
-			tn_osc.spacer.y     = tn_osc.osc_scale.y * tn_osc.spacer.y
-			tn_osc.font_scale.x = tn_osc.osc_scale.x * tn_osc.font_scale.x
-			tn_osc.font_scale.y = tn_osc.osc_scale.y * tn_osc.font_scale.y
-			tn_osc.progress.h   = tn_osc.osc_scale.y * tn_osc.progress.h
-		end
-		tn_osc.spacer.top, tn_osc.spacer.bottom  = tn_osc.spacer.y, tn_osc.spacer.y
-		tn_osc.thumbnail.w, tn_osc.thumbnail.h   = tn_state.width * tn_osc.scale.x, tn_state.height * tn_osc.scale.y
-		tn_osc.osd.w_scaled, tn_osc.osd.h_scaled = tn_osc.osd.w * tn_osc.scale.x, tn_osc.osd.h * tn_osc.scale.y
-		tn_style.spinner                         = (tn_style_format.spinner):format(min(tn_osc.thumbnail.w, tn_osc.thumbnail.h) * 0.6667, tn_osc.font_scale.x, tn_osc.font_scale.y)
-		tn_style.closest_index                   = (tn_style_format.closest_index):format(tn_palette.white, tn_palette.alpha_black, tn_palette.black, tn_palette.alpha_black, -1 * tn_osc.scale.x, -1 * tn_osc.scale.y)
-		if tn_osc_stats.percent < 1 then
-			tn_style.progress_text = (tn_style_format.progress_text):format(tn_palette.white, tn_palette.black, tn_palette.alpha_opaque, tn_palette.alpha_black, tn_osc.font_scale.x, tn_osc.font_scale.y, 2 * tn_osc.scale.x, 2 * tn_osc.scale.y)
-			tn_style.progress_mini = (tn_style_format.progress_mini):format(tn_palette.white, tn_palette.alpha_opaque, tn_osc.font_scale.x, tn_osc.font_scale.y)
-		end
-	end
-	
-	if not tn_osc.position.y then return end
-	if (osc_changed or tn_osc.cursor.x_last ~= tn_osc.cursor.x) and tn_osc.osd.w_scaled >= (tn_osc.thumbnail.w + 2 * tn_osc.spacer.x) then
-		tn_osc.cursor.x_last  = tn_osc.cursor.x
-		if tn_osc_options.centered then
-			tn_osc.position.x = tn_osc.osd.w_scaled * 0.5
-		else
-			local limit_left  = tn_osc.spacer.x + tn_osc.thumbnail.w * 0.5
-			local limit_right = tn_osc.osd.w_scaled - limit_left
-			tn_osc.position.x = min(max(tn_osc.cursor.x, limit_left), limit_right)
-		end
-		tn_osc.thumbnail.left, tn_osc.thumbnail.right = tn_osc.position.x - tn_osc.thumbnail.w * 0.5, tn_osc.position.x + tn_osc.thumbnail.w * 0.5
-		tn_osc.mini.x = tn_osc.thumbnail.right - 6 * tn_osc.osc_scale.x
-	end
-	
-	if (osc_changed or tn_osc.display_progress.last ~= tn_osc.display_progress.current) then
-		tn_osc.display_progress.last = tn_osc.display_progress.current
-		tn_osc.background.h          = tn_osc.thumbnail.h + (tn_osc.display_progress.current and (tn_osc.progress.h + tn_osc.spacer.y) or 0)
-		set_thumbnail_layout[user_opts.layout]()
-	end
-end
-
-local function find_closest(seek_index, round_up)
-	local tn_state, tn_thumbnails_indexed, tn_thumbnails_ready = tn_state, tn_thumbnails_indexed, tn_thumbnails_ready
-	if not (tn_thumbnails_indexed and tn_thumbnails_ready) then return nil, nil end
-	local time_index = floor(seek_index * tn_state.delta)
-	if tn_thumbnails_ready[time_index] then return seek_index + 1, tn_thumbnails_indexed[time_index] end
-	local direction, index = round_up and 1 or -1
-	for i = 1, tn_osc_stats.total_expected do
-		index        = seek_index + (i * direction)
-		time_index   = floor(index * tn_state.delta)
-		if tn_thumbnails_ready[time_index] then return index + 1, tn_thumbnails_indexed[time_index] end
-		index        = seek_index + (i * -direction)
-		time_index   = floor(index * tn_state.delta)
-		if tn_thumbnails_ready[time_index] then return index + 1, tn_thumbnails_indexed[time_index] end
-	end
-	return nil, nil
-end
-
-local draw_cmd = { name = 'overlay-add',    id = 9, offset = 0, fmt = 'bgra' }
-local hide_cmd = { name = 'overlay-remove', id = 9}
-
-local function draw_thumbnail(x, y, path)
-	draw_cmd.x = x
-	draw_cmd.y = y
-	draw_cmd.file = path
-	mp.command_native(draw_cmd)
-	tn_osc.thumbnail.visible = true
-end
-
-local function hide_thumbnail()
-	if tn_osc and tn_osc.thumbnail and tn_osc.thumbnail.visible then
-		mp.command_native(hide_cmd)
-		tn_osc.thumbnail.visible = false
-	end
-end
-
-local function show_thumbnail(seek_percent)
-	if not seek_percent then return nil, nil end
-	local scale, thumbnail, total_expected, ready = tn_osc.scale, tn_osc.thumbnail, tn_osc_stats.total_expected, tn_osc_stats.ready
-	local seek = seek_percent * (total_expected - 1)
-	local seek_index = floor(seek + 0.5)
-	local closest_index, path = thumbnail.closest_index_last, thumbnail.path_last
-	if     thumbnail.seek_index_last     ~= seek_index
-		or thumbnail.ready_last          ~= ready
-		or thumbnail.total_expected_last ~= tn_osc_stats.total_expected
-	then
-		closest_index, path = find_closest(seek_index, seek_index < seek)
-		thumbnail.closest_index_last, thumbnail.total_expected_last, thumbnail.ready_last, thumbnail.seek_index_last = closest_index, total_expected, ready, seek_index
-	end
-	local x, y = floor((thumbnail.left or 0) / scale.x + 0.5), floor((thumbnail.top or 0) / scale.y + 0.5)
-	if path and not (thumbnail.visible and thumbnail.x_last == x and thumbnail.y_last == y and thumbnail.path_last == path) then
-		thumbnail.x_last, thumbnail.y_last, thumbnail.path_last  = x, y, path
-		draw_thumbnail(x, y, path)
-	end
-	return closest_index, path
-end
-
-local function ass_new(ass, x, y, align, style, text)
-	ass:new_event()
-	ass:pos(x, y)
-	if align then ass:an(align)     end
-	if style then ass:append(style) end
-	if text  then ass:append(text)  end
-end
-
-local function ass_rect(ass, x1, y1, x2, y2)
-	ass:draw_start()
-	ass:rect_cw(x1, y1, x2, y2)
-	ass:draw_stop()
-end
-
-local draw_progress = {
-	[message.queued]     = function(ass, index, block_w, block_h) ass:rect_cw((index - 1) * block_w,             0, index * block_w, block_h) end,
-	[message.processing] = function(ass, index, block_w, block_h) ass:rect_cw((index - 1) * block_w, block_h * 0.2, index * block_w, block_h * 0.8) end,
-	[message.failed]     = function(ass, index, block_w, block_h) ass:rect_cw((index - 1) * block_w, block_h * 0.4, index * block_w, block_h * 0.6) end,
-}
-
-local function display_tn_osc(seek_y, seek_percent, ass)
-	if not (seek_y and seek_percent and ass and tn_state and tn_osc_stats and tn_osc_options and tn_state.width and tn_state.height and tn_state.duration and tn_state.cache_dir) or not tn_osc_options.visible then hide_thumbnail() return end
-
-	update_tn_osc_params(seek_y)
-	local tn_osc_stats, tn_osc, tn_style, tn_style_format, ass_new, ass_rect, seek_percent = tn_osc_stats, tn_osc, tn_style, tn_style_format, ass_new, ass_rect, seek_percent * 0.01
-	local closest_index, path = show_thumbnail(seek_percent)
-
-	-- Background
-	ass_new(ass, tn_osc.thumbnail.left, tn_osc.background.top, 7, tn_style.background)
-	ass_rect(ass, -tn_osc.spacer.x, -tn_osc.spacer.top, tn_osc.thumbnail.w + tn_osc.spacer.x, tn_osc.background.h + tn_osc.spacer.bottom)
-
-	local spinner_color, spinner_alpha = tn_palette.white, tn_palette.alpha_white
-	if not path then
-		ass_new(ass, tn_osc.thumbnail.left, tn_osc.thumbnail.top, 7, tn_style.subbackground)
-		ass_rect(ass, 0, 0, tn_osc.thumbnail.w, tn_osc.thumbnail.h)
-		spinner_color, spinner_alpha = tn_palette.black, tn_palette.alpha_black
-	end
-	ass_new(ass, tn_osc.position.x, tn_osc.thumbnail.top + tn_osc.thumbnail.h * 0.5, 5, tn_style.spinner .. (tn_style_format.spinner2):format(spinner_color, spinner_alpha, tn_osc.background.rotation * seek_percent * 1080), tn_osc.background.text)
-
-	-- Mini Progress Spinner
-	if tn_osc.display_progress.current ~= nil and not tn_osc.display_progress.current and tn_osc_stats.percent < 1 then
-		ass_new(ass, tn_osc.mini.x, tn_osc.mini.y, 5, tn_style.progress_mini .. (tn_style_format.progress_mini2):format(tn_osc_stats.percent * -360 + 90), tn_osc.mini.text)
-	end
-
-	-- Progress Bar
-	if tn_osc.display_progress.current then
-		local block_w, index = tn_osc_stats.total_expected > 0 and tn_state.width * tn_osc.scale.y / tn_osc_stats.total_expected or 0, 0
-		if tn_thumbnails_indexed and block_w > 0 then
-			-- Loading bar
-			ass_new(ass, tn_osc.thumbnail.left, tn_osc.progress.top, 7, tn_style.progress_block)
-			ass:draw_start()
-			for time_index, status in pairs(tn_thumbnails_indexed) do
-				index = floor(time_index / tn_state.delta) + 1
-				if index ~= closest_index and not tn_thumbnails_ready[time_index] and index <= tn_osc_stats.total_expected and draw_progress[status] ~= nil then
-					draw_progress[status](ass, index, block_w, tn_osc.progress.h)
-				end
-			end
-			ass:draw_stop()
-
-			if closest_index and closest_index <= tn_osc_stats.total_expected then
-				ass_new(ass, tn_osc.thumbnail.left, tn_osc.progress.top, 7, tn_style.closest_index)
-				ass_rect(ass, (closest_index - 1) * block_w, 0, closest_index * block_w, tn_osc.progress.h)
-			end
-		end
-
-		-- Text: Timer
-		ass_new(ass, tn_osc.thumbnail.left + 3 * tn_osc.osc_scale.y, tn_osc.progress.mid, 4, tn_style.progress_text, (tn_style_format.text_timer):format(tn_osc_stats.timer))
-
-		-- Text: Number or Index of Thumbnail
-		local temp = tn_osc_stats.percent < 1 and tn_osc_stats.ready or closest_index
-		local processing = tn_osc_stats.processing > 0 and (tn_style_format.text_progress2):format(tn_osc_stats.processing) or ''
-		ass_new(ass, tn_osc.position.x, tn_osc.progress.mid, 5, tn_style.progress_text, (tn_style_format.text_progress):format(temp and temp or 0, tn_osc_stats.total_expected) .. processing)
-
-		-- Text: Percentage
-		ass_new(ass, tn_osc.thumbnail.right - 3 * tn_osc.osc_scale.y, tn_osc.progress.mid, 6, tn_style.progress_text, (tn_style_format.text_percent):format(min(100, tn_osc_stats.percent * 100)))
-	end
-end
-
-
----------------
--- Listeners --
----------------
-mp.register_script_message(message.osc.reset, function()
-	hide_thumbnail()
-	reset_all()	
-end)
-
-local text_progress_format = { two_digits = '%.2d/%.2d', three_digits = '%.3d/%.3d' }
-
-mp.register_script_message(message.osc.update, function(json)
-	local new_data = parse_json(json)
-	if not new_data then return end
-	if new_data.state then
-		tn_state = new_data.state
-		if tn_state.is_rotated then tn_state.width, tn_state.height = tn_state.height, tn_state.width end
-		draw_cmd.w = tn_state.width
-		draw_cmd.h = tn_state.height
-		draw_cmd.stride = tn_state.width * 4
-	end
-	if new_data.osc_options then tn_osc_options = new_data.osc_options end
-	if new_data.osc_stats then
-		tn_osc_stats = new_data.osc_stats
-		if tn_osc_options and tn_osc_options.show_progress then
-			if     tn_osc_options.show_progress == 0 then tn_osc.display_progress.current = false
-			elseif tn_osc_options.show_progress == 1 then tn_osc.display_progress.current = tn_osc_stats.percent < 1
-			else                                          tn_osc.display_progress.current = true end
-		end
-		tn_style_format.text_progress = tn_osc_stats.total > 99 and text_progress_format.three_digits or text_progress_format.two_digits
-		if tn_osc_stats.percent >= 1 then mp.command_native({'script-message', message.osc.finish}) end
-	end
-	if new_data.thumbnails and tn_state then
-		local index, ready
-		for time_string, status in pairs(new_data.thumbnails) do
-			index, ready = tonumber(time_string), (status == message.ready)
-			tn_thumbnails_indexed[index] = ready and join_paths(tn_state.cache_dir, time_string) .. tn_state.cache_extension or status
-			tn_thumbnails_ready[index]   = ready
-		end
-	end
-	request_tick()
-end)
-
-mp.register_script_message(message.debug, function()
-	msg.info("Thumbnailer OSC Internal States:")
-	msg.info("tn_state:", tn_state and utils.to_string(tn_state) or 'nil')
-	msg.info("tn_thumbnails_indexed:", tn_thumbnails_indexed and utils.to_string(tn_thumbnails_indexed) or 'nil')
-	msg.info("tn_thumbnails_ready:", tn_thumbnails_ready and utils.to_string(tn_thumbnails_ready) or 'nil')
-	msg.info("tn_osc_options:", tn_osc_options and utils.to_string(tn_osc_options) or 'nil')
-	msg.info("tn_osc_stats:", tn_osc_stats and utils.to_string(tn_osc_stats) or 'nil')
-	msg.info("tn_osc:", tn_osc and utils.to_string(tn_osc) or 'nil')
-end)
-
-
-
-
-
-
-
-
-
-
--------------
--- osc.lua --
--------------
 local osc_param = { -- calculated by osc_init()
     playresy = 0,                           -- canvas size Y
     playresx = 0,                           -- canvas size X
@@ -563,41 +74,24 @@ local osc_param = { -- calculated by osc_init()
 local osc_styles = {
     bigButtons = "{\\blur0\\bord0\\1c&HFFFFFF\\3c&HFFFFFF\\fs50\\fnmpv-osd-symbols}",
     smallButtonsL = "{\\blur0\\bord0\\1c&HFFFFFF\\3c&HFFFFFF\\fs19\\fnmpv-osd-symbols}",
-    smallButtonsLlabel = ("{\\fscx105\\fscy105\\b%d\\fn%s}"):format(user_opts.font_bold, user_opts.font_mono),
+    smallButtonsLlabel = "{\\fscx105\\fscy105\\fn" .. mp.get_property("options/osd-font") .. "}",
     smallButtonsR = "{\\blur0\\bord0\\1c&HFFFFFF\\3c&HFFFFFF\\fs30\\fnmpv-osd-symbols}",
     topButtons = "{\\blur0\\bord0\\1c&HFFFFFF\\3c&HFFFFFF\\fs12\\fnmpv-osd-symbols}",
 
     elementDown = "{\\1c&H999999}",
-    timecodes = ("{\\blur0\\bord0\\1c&HFFFFFF\\3c&HFFFFFF\\fs20\\b%d\\fn%s}"):format(user_opts.font_bold, user_opts.font_mono),
-    vidtitle = ("{\\blur0\\bord0\\1c&HFFFFFF\\3c&HFFFFFF\\fs12\\b%d\\q2\\fn%s}"):format(user_opts.font_bold, user_opts.font),
+    timecodes = "{\\blur0\\bord0\\1c&HFFFFFF\\3c&HFFFFFF\\fs20}",
+    vidtitle = "{\\blur0\\bord0\\1c&HFFFFFF\\3c&HFFFFFF\\fs12\\q2}",
     box = "{\\rDefault\\blur0\\bord1\\1c&H000000\\3c&HFFFFFF}",
 
     topButtonsBar = "{\\blur0\\bord0\\1c&HFFFFFF\\3c&HFFFFFF\\fs18\\fnmpv-osd-symbols}",
     smallButtonsBar = "{\\blur0\\bord0\\1c&HFFFFFF\\3c&HFFFFFF\\fs28\\fnmpv-osd-symbols}",
-    timecodesBar = ("{\\blur0\\bord0\\1c&HFFFFFF\\3c&HFFFFFF\\fs27\\b%d\\fn%s}"):format(user_opts.font_bold, user_opts.font_mono),
-    timePosBar = ("{\\blur0.54\\bord%s\\1c&HFFFFFF\\3c&H000000\\fs27\\b%d\\fn%s}"):format(user_opts.tooltipborder, user_opts.font_bold, user_opts.font_mono),
-    vidtitleBar = ("{\\blur0\\bord0\\1c&HFFFFFF\\3c&HFFFFFF\\fs18\\b%d\\q2\\fn%s}"):format(user_opts.font_bold, user_opts.font),
+    timecodesBar = "{\\blur0\\bord0\\1c&HFFFFFF\\3c&HFFFFFF\\fs27}",
+    timePosBar = "{\\blur0\\bord".. user_opts.tooltipborder .."\\1c&HFFFFFF\\3c&H000000\\fs30}",
+    vidtitleBar = "{\\blur0\\bord0\\1c&HFFFFFF\\3c&HFFFFFF\\fs18\\q2}",
 
     wcButtons = "{\\1c&HFFFFFF\\fs24\\fnmpv-osd-symbols}",
     wcTitle = "{\\1c&HFFFFFF\\fs24\\q2}",
     wcBar = "{\\1c&H000000}",
-
-    -- bottombox样式
-    bb_bigButton1 =  "{\\blur0.25\\bord0\\1c&HF2A823\\3c&HFFFFFF\\fs50\\fnmpv-osd-symbols}",
-    bb_bigButton2 =  "{\\blur0.25\\bord0\\1c&HFACE87\\3c&HFFFFFF\\fs26\\fnmpv-osd-symbols}",
-    bb_bigButton3 =  "{\\blur0.25\\bord0\\1c&H9A530E\\3c&HFFFFFF\\fs34\\fnmpv-osd-symbols}",
-    bb_backgroud  =  "{\\blur100\\bord180\\1c&H000000&\\3c&H000000&}",
-    bb_Atracks    =  "{\\blur0\\bord0\\1c&H73CBEF\\3c&HFFFFFF\\fs24\\fnmpv-osd-symbols}",
-    bb_Stracks    =  "{\\blur0\\bord0\\1c&H70DC57\\3c&HFFFFFF\\fs24\\fnmpv-osd-symbols}",
-    bb_volume     =  "{\\blur0\\bord0\\1c&H00F0FF\\3c&HFFFFFF\\fs30\\fnmpv-osd-symbols}",
-    bb_fs         =  "{\\blur0\\bord0\\1c&HAC328E\\3c&HFFFFFF\\fs30\\fnmpv-osd-symbols}",
-    bb_lua_stats  =  "{\\blur0\\bord0\\1c&H9370DB\\3c&HFFFFFF\\fs30\\fr180\\fnmpv-osd-symbols}",
-    bb_seekbar    = ("{\\blur0\\bord0\\1c&HFFFFFF\\3c&HFFFFFF\\fs14\\b%d\\q2\\fn%s}"):format(user_opts.font_bold, user_opts.font),
-    bb_seektime   = ("{\\blur0.54\\bord%s\\1c&HFFFFFF\\3c&H000000\\fs18\\b%d\\fn%s}"):format(user_opts.tooltipborder, user_opts.font_bold, user_opts.font_mono),
-    bb_timecodes  = ("{\\blur0\\bord0\\1c&HDCDCDC\\3c&HFFFFFF\\fs20\\b%d\\fn%s}"):format(user_opts.font_bold, user_opts.font_mono),
-    bb_cachetime  = ("{\\blur0\\bord0\\1c&HDCDCDC\\3c&HFFFFFF\\fs14\\b%d\\fn%s}"):format(user_opts.font_bold, user_opts.font_mono),
-    bb_downtitle  = ("{\\blur0\\bord0\\1c&HC0C0C0\\3c&HFFFFFF\\fs16\\b%d\\q2\\fn%s}"):format(user_opts.font_bold, user_opts.font),
-    bb_sub_title  = ("{\\blur0\\bord0\\1c&HC0C0C0\\3c&HFFFFFF\\fs16\\b%d\\q2\\fn%s}"):format(user_opts.font_bold, user_opts.font),
 }
 
 -- internal states, do not touch
@@ -633,6 +127,13 @@ local state = {
     border = true,
     maximized = false,
     osd = mp.create_osd_overlay("ass-events"),
+    chapter_list = {},                      -- sorted by time
+}
+
+local thumbfast = {
+    width = 0,
+    height = 0,
+    disabled = false
 }
 
 local window_control_box_width = 80
@@ -845,7 +346,7 @@ end
 -- Tracklist Management
 --
 
-local nicetypes = {video = "视频", audio = "音频", sub = "字幕"}
+local nicetypes = {video = "Video", audio = "Audio", sub = "Subtitle"}
 
 -- updates the OSC internal playlists, should be run each time the track-layout changes
 function update_tracklist()
@@ -874,13 +375,13 @@ end
 
 -- return a nice list of tracks of the given type (video, audio, sub)
 function get_tracklist(type)
-    local msg = "可用" .. nicetypes[type] .. "轨："
-    if #tracks_osc[type] == 0 then
+    local msg = "Available " .. nicetypes[type] .. " Tracks: "
+    if not tracks_osc or #tracks_osc[type] == 0 then
         msg = msg .. "none"
     else
         for n = 1, #tracks_osc[type] do
             local track = tracks_osc[type][n]
-            local lang, title, selected = "未知", "", "○"
+            local lang, title, selected = "unknown", "", "○"
             if not(track.lang == nil) then lang = track.lang end
             if not(track.title == nil) then title = track.title end
             if (track.id == tonumber(mp.get_property(type))) then
@@ -913,11 +414,11 @@ function set_track(type, next)
     mp.commandv("set", type, new_track_mpv)
 
         if (new_track_osc == 0) then
-        show_message(nicetypes[type] .. "轨：<禁用>")
+        show_message(nicetypes[type] .. " Track: none")
     else
-        show_message(nicetypes[type]  .. "轨："
+        show_message(nicetypes[type]  .. " Track: "
             .. new_track_osc .. "/" .. #tracks_osc[type]
-            .. " [".. (tracks_osc[type][new_track_osc].lang or "未知") .."] "
+            .. " [".. (tracks_osc[type][new_track_osc].lang or "unknown") .."] "
             .. (tracks_osc[type][new_track_osc].title or ""))
     end
 end
@@ -1113,16 +614,13 @@ end
 
 -- returns nil or a chapter element from the native property chapter-list
 function get_chapter(possec)
-    local cl = mp.get_property_native("chapter-list", {})
-    local ch = nil
+    local cl = state.chapter_list  -- sorted, get latest before possec, if any
 
-    -- chapters might not be sorted by time. find nearest-before/at possec
-    for n=1, #cl do
-        if possec >= cl[n].time and (not ch or cl[n].time > ch.time) then
-            ch = cl[n]
+    for n=#cl,1,-1 do
+        if possec >= cl[n].time then
+            return cl[n]
         end
     end
-    return ch
 end
 
 function render_elements(master_ass)
@@ -1141,14 +639,6 @@ function render_elements(master_ass)
                 state.forced_title = string.format(user_opts.chapter_fmt, ch.title)
             end
         end
-    end
-
-    -- bottombox右侧子标题的临时显示
-
-    state.forced_sub_title = nil
-    local se, ae = state.slider_element, elements[state.active_element]
-    if se and (ae == se or (not ae and mouse_hit(se))) then
-        state.forced_sub_title = mp.command_native({"expand-text", user_opts.sub_title2})
     end
 
     for n=1, #elements do
@@ -1324,6 +814,7 @@ function render_elements(master_ass)
                     end
 
                     local tx = get_virt_mouse_pos()
+                    local thumb_tx = tx
                     if (slider_lo.adjust_tooltip) then
                         if (an == 2) then
                             if (sliderpos < (s_min + 3)) then
@@ -1348,9 +839,43 @@ function render_elements(master_ass)
                     ass_append_alpha(elem_ass, slider_lo.alpha, 0)
                     elem_ass:append(tooltiplabel)
 
-                    display_tn_osc(ty, sliderpos, elem_ass)
-				else
-					hide_thumbnail()
+                    -- thumbnail
+                    if not thumbfast.disabled and thumbfast.width ~= 0 and thumbfast.height ~= 0 then
+                        local osd_w = mp.get_property_number("osd-width")
+                        if osd_w then
+                            local r_w, r_h = get_virt_scale_factor()
+
+                            local tooltip_font_size = (user_opts.layout == "box" or user_opts.layout == "slimbox") and 2 or 12
+                            local thumb_ty = user_opts.layout ~= "topbar" and element.hitbox.y1 - 8 or element.hitbox.y2 + tooltip_font_size + 8
+
+                            local thumb_pad = 2
+                            local thumb_margin_x = 20 / r_w
+                            local thumb_margin_y = (4 + user_opts.tooltipborder) / r_h + thumb_pad
+                            local thumb_x = math.min(osd_w - thumbfast.width - thumb_margin_x, math.max(thumb_margin_x, thumb_tx / r_w - thumbfast.width / 2))
+                            local thumb_y = user_opts.layout ~= "topbar" and thumb_ty / r_h - thumbfast.height - tooltip_font_size / r_h - thumb_margin_y or thumb_ty / r_h + thumb_margin_y
+
+                            thumb_x = math.floor(thumb_x + 0.5)
+                            thumb_y = math.floor(thumb_y + 0.5)
+
+                            elem_ass:new_event()
+                            elem_ass:pos(thumb_x * r_w, thumb_y * r_h)
+                            elem_ass:append(osc_styles.timePosBar)
+                            elem_ass:append("{\\1a&H20&}")
+                            elem_ass:draw_start()
+                            elem_ass:rect_cw(-thumb_pad * r_w, -thumb_pad * r_h, (thumbfast.width + thumb_pad) * r_w, (thumbfast.height + thumb_pad) * r_h)
+                            elem_ass:draw_stop()
+
+                            mp.commandv("script-message-to", "thumbfast", "thumb",
+                                mp.get_property_number("duration", 0) * (sliderpos / 100),
+                                thumb_x,
+                                thumb_y
+                            )
+                        end
+                    end
+                else
+                    if thumbfast.width ~= 0 and thumbfast.height ~= 0 then
+                        mp.commandv("script-message-to", "thumbfast", "clear")
+                    end
                 end
             end
 
@@ -1423,7 +948,7 @@ function get_playlist()
         return 'Empty playlist.'
     end
 
-    local message = string.format('播放列表 [%d/%d]\n', pos, count)
+    local message = string.format('Playlist [%d/%d]:\n', pos, count)
     for i, v in ipairs(limlist) do
         local title = v.title
         local _, filename = utils.split_path(v.filename)
@@ -1443,7 +968,7 @@ function get_chapterlist()
         return 'No chapters.'
     end
 
-    local message = string.format('章节列表 [%d/%d]\n', pos, count)
+    local message = string.format('Chapters [%d/%d]:\n', pos, count)
     for i, v in ipairs(limlist) do
         local time = mp.format_time(v.time)
         local title = v.title
@@ -1493,10 +1018,9 @@ function render_message(ass)
         local outline = tonumber(mp.get_property("options/osd-border-size"))
         local maxlines = math.ceil(osc_param.unscaled_y*0.75 / fontsize)
         local counterscale = osc_param.playresy / osc_param.unscaled_y
-        local hidpi_scale = mp.get_property_native("display-hidpi-scale", 1.0)
 
-        fontsize = fontsize * hidpi_scale * counterscale / math.max(0.65 + math.min(lines/maxlines, 1), 1)
-        outline = outline * hidpi_scale * counterscale / math.max(0.75 + math.min(lines/maxlines, 1)/2, 1)
+        fontsize = fontsize * counterscale / math.max(0.65 + math.min(lines/maxlines, 1), 1)
+        outline = outline * counterscale / math.max(0.75 + math.min(lines/maxlines, 1)/2, 1)
 
         local style = "{\\bord" .. outline .. "\\fs" .. fontsize .. "}"
 
@@ -1677,7 +1201,7 @@ function window_controls(topbar)
     -- Window Title
     ne = new_element("wctitle", "button")
     ne.content = function ()
-        local title = mp.command_native({"expand-text", user_opts.wctitle})
+        local title = mp.command_native({"expand-text", user_opts.title})
         -- escape ASS, and strip newlines and trailing slashes
         title = title:gsub("\\n", " "):gsub("\\$", ""):gsub("{","\\{")
         return not (title == "") and title or "mpv"
@@ -1879,189 +1403,6 @@ layouts["box"] = function ()
 
 end
 
--- bottombox布局
-layouts["bottombox"] = function ()
-
-    local osc_geo = {
-        w = osc_param.playresx,     -- 宽
-        h = 180,                    -- 高
-        r = 0,                      -- 圆角
-        p = 15,                     -- 内边距
-    }
-
-    -- bottombox的整体位置
-    local posX = osc_param.playresx / 2
-    local posY = osc_param.playresy - osc_geo.h / 2
-
-    -- position offset for contents aligned at the borders of the box
-    local pos_offsetX = (osc_geo.w - (2*osc_geo.p)) / 2
-    local pos_offsetY = (osc_geo.h - (2*osc_geo.p)) / 2
-
-    osc_param.areas = {} -- delete areas
-
-    -- area for active mouse input
-    add_area("input", get_hitbox_coords(posX, posY, 5, osc_geo.w, osc_geo.h))
-
-    -- area for show/hide
-    local sh_area_y0, sh_area_y1
-    if user_opts.valign > 0 then
-        -- deadzone above OSC
-        sh_area_y0 = get_align(-1 + (2*user_opts.deadzonesize),
-            posY - (osc_geo.h / 2), 0, 0)
-        sh_area_y1 = osc_param.playresy
-    else
-        -- deadzone below OSC
-        sh_area_y0 = 0
-        sh_area_y1 = (posY + (osc_geo.h / 2)) +
-            get_align(1 - (2*user_opts.deadzonesize),
-            osc_param.playresy - (posY + (osc_geo.h / 2)), 0, 0)
-    end
-    add_area("showhide", 0, sh_area_y0, osc_param.playresx, sh_area_y1)
-
-    -- fetch values
-    local osc_w, osc_h, osc_r, osc_p =
-        osc_geo.w, osc_geo.h, osc_geo.r, osc_geo.p
-
-    local lo
-
-    --
-    -- 背景板
-    --
-
-    new_element('bb_backgroud', 'box')
-	lo = add_layout('bb_backgroud')
-	lo.geometry = {x = posX, y = osc_param.playresy, an = 5, w = osc_w, h = 0}
-	lo.layer = 10
-	lo.style = osc_styles.bb_backgroud
-	lo.alpha[1] = 255
-	lo.alpha[3] = 0
-
-    --
-    -- 下方标题
-    --
-
-    local titlerowY = posY + pos_offsetY - 5
-
-    lo = add_layout("title")
-    lo.geometry = {x = posX, y = titlerowY, an = 5, w = 500, h = 18}
-    lo.style = osc_styles.bb_downtitle
-    lo.button.maxchars = user_opts.boxmaxchars
-
-    -- 右侧子标题
-
-    lo = add_layout("sub_title")
-    lo.geometry = {x = posX + pos_offsetX, y = titlerowY - 55, an = 6, w = 0, h = 0}
-    lo.style = osc_styles.bb_sub_title
-    lo.button.maxchars = user_opts.boxmaxchars
-
-    --
-    -- 播放按钮
-    --
-
-    local bigbtnrowY = posY - pos_offsetY + 65
-    local bigbtndist = 50
-
-    lo = add_layout("playpause")
-    lo.geometry =
-        {x = posX, y = bigbtnrowY, an = 5, w = 40, h = 40}
-    lo.style = osc_styles.bb_bigButton1
-
-    lo = add_layout("skipback")
-    lo.geometry =
-        {x = posX - bigbtndist, y = bigbtnrowY, an = 5, w = 15, h = 15}
-    lo.style = osc_styles.bb_bigButton2
-
-    lo = add_layout("skipfrwd")
-    lo.geometry =
-        {x = posX + bigbtndist, y = bigbtnrowY, an = 5, w = 15, h = 15}
-    lo.style = osc_styles.bb_bigButton2
-
-    lo = add_layout("ch_prev")
-    lo.geometry =
-        {x = posX - (bigbtndist * 2), y = bigbtnrowY, an = 5, w = 15, h = 15}
-    lo.style = osc_styles.bb_bigButton2
-
-    lo = add_layout("ch_next")
-    lo.geometry =
-        {x = posX + (bigbtndist * 2), y = bigbtnrowY, an = 5, w = 15, h = 15}
-    lo.style = osc_styles.bb_bigButton2
-
-    lo = add_layout("pl_prev")
-    lo.geometry =
-        {x = posX - (bigbtndist * 3), y = bigbtnrowY, an = 5, w = 25, h = 25}
-    lo.style = osc_styles.bb_bigButton3
-
-    lo = add_layout("pl_next")
-    lo.geometry =
-        {x = posX + (bigbtndist * 3), y = bigbtnrowY, an = 5, w = 25, h = 25}
-    lo.style = osc_styles.bb_bigButton3
-
-    -- 快捷按钮
-
-    lo = add_layout("cy_audio")
-    lo.geometry =
-        {x = posX - pos_offsetX + 40, y = bigbtnrowY, an = 5, w = 70, h = 25}
-    lo.style = osc_styles.bb_Atracks
-
-    lo = add_layout("cy_sub")
-    lo.geometry =
-        {x = posX - pos_offsetX + (50 * 2) + osc_geo.p, y = bigbtnrowY, an = 5, w = 70, h = 25}
-    lo.style = osc_styles.bb_Stracks
-
-    lo = add_layout("tog_fs")
-    lo.geometry =
-        {x = posX + pos_offsetX - 25, y = bigbtnrowY, an = 5, w = 25, h = 25}
-    lo.style = osc_styles.bb_fs
-
-    lo = add_layout("volume")
-    lo.geometry =
-        {x = posX + pos_offsetX - (30 * 2) - osc_geo.p, y = bigbtnrowY, an = 4, w = 25, h = 25}
-    lo.style = osc_styles.bb_volume
-
-    -- 联动内置的stats.lua
-
-    lo = add_layout("lua_stats")
-    lo.geometry =
-        {x = posX + pos_offsetX - (45 * 2) - osc_geo.p, y = bigbtnrowY + 2, an = 5, w = 25, h = 25}
-    lo.style = osc_styles.bb_lua_stats
-
-    --
-    -- 进度条
-    --
-
-    lo = add_layout("seekbar")
-    lo.geometry =
-        {x = posX, y = posY + pos_offsetY - 22, an = 2, w = pos_offsetX * 2, h = 20}
-    lo.style = osc_styles.bb_seekbar
-    lo.slider.gap = 2
-    lo.slider.tooltip_style = osc_styles.bb_seektime
-    lo.slider.tooltip_an = 5
-    lo.slider.stype = user_opts["seekbarstyle"]
-    lo.slider.rtype = user_opts["seekrangestyle"]
-
-    --
-    -- 时间码和缓存
-    --
-
-    local bottomrowY = posY + pos_offsetY - 5
-
-    lo = add_layout("tc_left")
-    lo.geometry =
-        {x = posX - pos_offsetX, y = bottomrowY, an = 4, w = 80, h = 18}
-    lo.style = osc_styles.bb_timecodes
-
-    lo = add_layout("tc_right")
-    lo.geometry =
-        {x = posX + pos_offsetX, y = bottomrowY, an = 6, w = 80, h = 18}
-    lo.style = osc_styles.bb_timecodes
-
-    lo = add_layout("cache")
-    lo.geometry =
-        {x = posX - pos_offsetX, y = bottomrowY - pos_offsetY + 18, an = 4, w = 110, h = 14}
-    lo.style = osc_styles.bb_cachetime
-
-end
-
 -- slim box layout
 layouts["slimbox"] = function ()
 
@@ -2184,6 +1525,11 @@ function bar_layout(direction)
     local padY = 3
     local buttonW = 27
     local tcW = (state.tc_ms) and 170 or 110
+    if user_opts.tcspace >= 50 and user_opts.tcspace <= 200 then
+        -- adjust our hardcoded font size estimation
+        tcW = tcW * user_opts.tcspace / 100
+    end
+
     local tsW = 90
     local minW = (buttonW + padX)*5 + (tcW + padX)*4 + (tsW + padX)*2
 
@@ -2436,6 +1782,8 @@ function update_options(list)
     request_init()
 end
 
+local UNICODE_MINUS = string.char(0xe2, 0x88, 0x92)  -- UTF-8 for U+2212 MINUS SIGN
+
 -- OSC INIT
 function osc_init()
     msg.debug("osc_init")
@@ -2452,8 +1800,6 @@ function osc_init()
     else
         scale = user_opts.scalewindowed
     end
-    
-    scale = scale * mp.get_property_native("display-hidpi-scale", 1.0)
 
     if user_opts.vidscale then
         osc_param.unscaled_y = baseResY
@@ -2504,17 +1850,6 @@ function osc_init()
 
     ne.eventresponder["mbtn_right_up"] =
         function () show_message(mp.get_property_osd("filename")) end
-
-    -- sub_title -- bottombox的右侧子标题
-    ne = new_element("sub_title", "button")
-
-    ne.content = function ()
-        local title = state.forced_sub_title or
-                      mp.command_native({"expand-text", user_opts.sub_title})
-        -- escape ASS, and strip newlines and trailing slashes
-        title = title:gsub("\\n", " "):gsub("\\$", ""):gsub("{","\\{")
-        return not (title == "") and title or "mpv"
-    end
 
     -- playlist buttons
 
@@ -2629,7 +1964,7 @@ function osc_init()
     --
     update_tracklist()
 
-    --cy_audio --全局音轨按钮增强
+    --cy_audio
     ne = new_element("cy_audio", "button")
 
     ne.enabled = (#tracks_osc.audio > 0)
@@ -2648,12 +1983,7 @@ function osc_init()
     ne.eventresponder["shift+mbtn_left_down"] =
         function () show_message(get_tracklist("audio"), 2) end
 
-    ne.eventresponder["wheel_up_press"] =
-        function () set_track("audio", -1) end
-    ne.eventresponder["wheel_down_press"] =
-        function () set_track("audio", 1) end
-
-    --cy_sub --全局字幕按钮增强
+    --cy_sub
     ne = new_element("cy_sub", "button")
 
     ne.enabled = (#tracks_osc.sub > 0)
@@ -2671,11 +2001,6 @@ function osc_init()
         function () set_track("sub", -1) end
     ne.eventresponder["shift+mbtn_left_down"] =
         function () show_message(get_tracklist("sub"), 2) end
-
-    ne.eventresponder["wheel_up_press"] =
-        function () set_track("sub", -1) end
-    ne.eventresponder["wheel_down_press"] =
-        function () set_track("sub", 1) end
 
     --tog_fs
     ne = new_element("tog_fs", "button")
@@ -2765,8 +2090,7 @@ function osc_init()
             "absolute-percent", "exact") end
     ne.eventresponder["reset"] =
         function (element) element.state.lastseek = nil end
-    ne.eventresponder["mbtn_right_down"] = function (element) mp.commandv('script-message', 'Thumbnailer-toggle-osc') end
-    ne.eventresponder["mbtn_right_dbl_press"] = function (element) mp.commandv('script-message', 'Thumbnailer-double') end
+
 
     -- tc_left (current pos)
     ne = new_element("tc_left", "button")
@@ -2789,10 +2113,11 @@ function osc_init()
     ne.visible = (mp.get_property_number("duration", 0) > 0)
     ne.content = function ()
         if (state.rightTC_trem) then
+            local minus = user_opts.unicodeminus and UNICODE_MINUS or "-"
             if state.tc_ms then
-                return ("-"..mp.get_property_osd("playtime-remaining/full"))
+                return (minus..mp.get_property_osd("playtime-remaining/full"))
             else
-                return ("-"..mp.get_property_osd("playtime-remaining"))
+                return (minus..mp.get_property_osd("playtime-remaining"))
             end
         else
             if state.tc_ms then
@@ -2824,7 +2149,7 @@ function osc_init()
         end
         local min = math.floor(dmx_cache / 60)
         local sec = math.floor(dmx_cache % 60) -- don't round e.g. 59.9 to 60
-        return "缓冲" .. (min > 0 and
+        return "Cache: " .. (min > 0 and
             string.format("%sm%02.0fs", min, sec) or
             string.format("%3.0fs", sec))
     end
@@ -2847,23 +2172,10 @@ function osc_init()
         function () mp.commandv("cycle", "mute") end
 
     ne.eventresponder["wheel_up_press"] =
-        function () mp.commandv("osd-auto", "add", "volume", 1) end
+        function () mp.commandv("osd-auto", "add", "volume", 5) end
     ne.eventresponder["wheel_down_press"] =
-        function () mp.commandv("osd-auto", "add", "volume", -1) end
+        function () mp.commandv("osd-auto", "add", "volume", -5) end
 
-    -- bottombox的统计信息按钮 联动内置的stats.lua
-    ne = new_element("lua_stats", "button")
-
-    ne.content = "\238\132\135"
-    ne.eventresponder["mbtn_left_up"] =
-        function () mp.commandv("script-binding", "stats/display-stats-toggle") end
-    ne.eventresponder["mbtn_right_up"] =
-        function () mp.commandv("script-binding", "stats/display-page-4") end
-
-    ne.eventresponder["wheel_up_press"] =
-        function () mp.commandv("script-binding", "stats/display-page-1") end
-    ne.eventresponder["wheel_down_press"] =
-        function () mp.commandv("script-binding", "stats/display-page-2") end
 
     -- load layout
     layouts[user_opts.layout]()
@@ -3190,8 +2502,6 @@ function render()
     -- actual OSC
     if state.osc_visible then
         render_elements(ass)
-    else
-    	hide_thumbnail()
     end
 
     -- submit
@@ -3319,29 +2629,37 @@ function tick()
 
         -- render idle message
         msg.trace("idle message")
-        local icon_x, icon_y = 320 - 26, 140
+        local _, _, display_aspect = mp.get_osd_size()
+        local display_h = 360
+        local display_w = display_h * display_aspect
+        -- logo is rendered at 2^(6-1) = 32 times resolution with size 1800x1800
+        local icon_x, icon_y = (display_w - 1800 / 32) / 2, 140
         local line_prefix = ("{\\rDefault\\an7\\1a&H00&\\bord0\\shad0\\pos(%f,%f)}"):format(icon_x, icon_y)
 
         local ass = assdraw.ass_new()
         -- mpv logo
-        for i, line in ipairs(logo_lines) do
-            ass:new_event()
-            ass:append(line_prefix .. line)
+        if user_opts.idlescreen then
+            for i, line in ipairs(logo_lines) do
+                ass:new_event()
+                ass:append(line_prefix .. line)
+            end
         end
 
         -- Santa hat
-        if is_december and not user_opts.greenandgrumpy then
+        if is_december and user_opts.idlescreen and not user_opts.greenandgrumpy then
             for i, line in ipairs(santa_hat_lines) do
                 ass:new_event()
                 ass:append(line_prefix .. line)
             end
         end
 
-        ass:new_event()
-        ass:pos(320, icon_y+100)
-        ass:an(8)
-        ass:append("拖入文件或网址进行播放")
-        set_osd(640, 360, ass.text)
+        if user_opts.idlescreen then
+            ass:new_event()
+            ass:pos(display_w / 2, icon_y + 65)
+            ass:an(8)
+            ass:append("Drop files or URLs to play here.")
+        end
+        set_osd(display_w, display_h, ass.text)
 
         if state.showhide_enabled then
             mp.disable_key_bindings("showhide")
@@ -3428,9 +2746,17 @@ update_duration_watch()
 
 mp.register_event("shutdown", shutdown)
 mp.register_event("start-file", request_init)
+mp.observe_property("osc", "bool", function(name, value)
+    if value == true then
+        mp.set_property("osc", "no")
+    end
+end)
 mp.observe_property("track-list", nil, request_init)
 mp.observe_property("playlist", nil, request_init)
-mp.observe_property("chapter-list", nil, function()
+mp.observe_property("chapter-list", "native", function(_, list)
+    list = list or {}  -- safety, shouldn't return nil
+    table.sort(list, function(a, b) return a.time < b.time end)
+    state.chapter_list = list
     update_duration_watch()
     request_init()
 end)
@@ -3515,7 +2841,7 @@ mp.set_key_bindings({
     {"wheel_down",          function(e) process_event("wheel_down", "press") end},
     {"mbtn_left_dbl",       "ignore"},
     {"shift+mbtn_left_dbl", "ignore"},
-    {"mbtn_right_dbl",      function(e) process_event("mbtn_right_dbl", "press") end},
+    {"mbtn_right_dbl",      "ignore"},
 }, "input", "force")
 mp.enable_key_bindings("input")
 
@@ -3572,11 +2898,11 @@ function visibility_mode(mode, no_osd)
     utils.shared_script_property_set("osc-visibility", mode)
 
     if not no_osd and tonumber(mp.get_property("osd-level")) >= 1 then
-        mp.osd_message("Thumbnailer_OSC的可见性：" .. mode)
+        mp.osd_message("OSC visibility: " .. mode)
     end
 
     -- Reset the input state on a mode change. The input state will be
-    -- recalcuated on the next render cycle, except in 'never' mode where it
+    -- recalculated on the next render cycle, except in 'never' mode where it
     -- will just stay disabled.
     mp.disable_key_bindings("input")
     mp.disable_key_bindings("window-controls")
@@ -3586,9 +2912,44 @@ function visibility_mode(mode, no_osd)
     request_tick()
 end
 
+function idlescreen_visibility(mode, no_osd)
+    if mode == "cycle" then
+        if user_opts.idlescreen then
+            mode = "no"
+        else
+            mode = "yes"
+        end
+    end
+
+    if mode == "yes" then
+        user_opts.idlescreen = true
+    else
+        user_opts.idlescreen = false
+    end
+
+    utils.shared_script_property_set("osc-idlescreen", mode)
+
+    if not no_osd and tonumber(mp.get_property("osd-level")) >= 1 then
+        mp.osd_message("OSC logo visibility: " .. tostring(mode))
+    end
+
+    request_tick()
+end
+
 visibility_mode(user_opts.visibility, true)
 mp.register_script_message("osc-visibility", visibility_mode)
 mp.add_key_binding(nil, "visibility", function() visibility_mode("cycle") end)
+
+mp.register_script_message("osc-idlescreen", idlescreen_visibility)
+
+mp.register_script_message("thumbfast-info", function(json)
+    local data = utils.parse_json(json)
+    if type(data) ~= "table" or not data.width or not data.height then
+        msg.error("thumbfast-info: received json didn't produce a table with thumbnail information")
+    else
+        thumbfast = data
+    end
+end)
 
 set_virt_mouse_area(0, 0, 0, 0, "input")
 set_virt_mouse_area(0, 0, 0, 0, "window-controls")
